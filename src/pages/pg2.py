@@ -8,7 +8,7 @@ import os
 dash.register_page(__name__, name='CATCH')
 
 # page 2 data
-os.chdir('/Users/ubajaj/PycharmProjects/pythonProject/APP-C/src')
+os.chdir('/Users/ubajaj/PycharmProjects/pythonProject/APP-D/src')
 df_1 = pd.read_csv('data/pokedex.csv')
 df_1=df_1.drop('Unnamed: 0',axis=1)
 

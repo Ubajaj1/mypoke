@@ -1,44 +1,83 @@
 import dash
-from dash import dcc, html, callback, Output, Input
-import plotly.express as px
+from dash import dcc, html, callback, Output, Input, ctx
 import dash_bootstrap_components as dbc
-
+import pandas as pd
+import os
 dash.register_page(__name__, name='EVOLVE')
 
-# page 4 data
-df = px.data.tips()
+os.chdir('/Users/ubajaj/PycharmProjects/pythonProject/APP-D/src')
 
-layout = html.Div(
-    [
-        dbc.Row([
-            dbc.Col(
-                [
-                    html.Img(src='assets/smoking2.jpg')
-                ], width=4
-            ),
-            dbc.Col(
-                [
-                    dcc.RadioItems(df.day.unique(), id='day1-choice', value='Sat')
-                ], width=6
-            )
-        ]),
-        dbc.Row([
-            dbc.Col(
-                [
-                    dcc.Graph(id='bar1-fig',
-                              figure=px.bar(df, x='smoker', y='total_bill'))
-                ], width=12
-            )
-        ])
-    ]
-)
+# Read data
+df = pd.read_csv('data/pokedex.csv')
+df_images = pd.read_excel('data/pokedex_images_subset.xlsx')
+df_evolve = pd.read_excel('data/Evolution_data_transposed.xlsx')
 
+# Merge data
+newdf = pd.merge(df, df_evolve, how='left', left_on='name', right_on='Pokemon_name')
+newdf = pd.merge(newdf, df_images, on=['pokedex_number', 'name'], how='left')
 
+# Rename columns and fill missing values
+newdf.rename(columns={'type_1': 'Primary Type', 'type_2': 'Secondary Type', 'pokedex_number': 'Pokedex Number', 'name': 'name',
+                      'status': 'Status', 'generation': 'Generation', 'species': 'Species', 'total_points': 'Total Points',
+                      'hp': 'Hp', 'catch_rate': 'Catch Rate', 'base_friendship': 'Base Friendship', 'catch_parameters': 'Catch Parameters',
+                      'base_experience': 'Base Experience', 'growth_rate': 'Growth Rate', 'percentage_male': 'Male (%)'}, inplace=True)
+newdf['link'] = newdf['link'].fillna(newdf['name'])
+newdf['Pokemon_name'] = newdf['Pokemon_name'].fillna(newdf['name'])
+newdf['Stage'] = newdf['Stage'].fillna('Stage_1')
+newdf['rank'] = newdf['rank'].fillna(1)
+
+newdf.sort_values(by=['link', 'rank'], ascending=[True, True], inplace=True)
+newdf['Catch Rate'] = newdf['Catch Rate'].fillna(-1)
+newdf['Base Friendship'] = newdf['Base Friendship'].fillna(-1)
+
+# Layout
+layout = html.Div([
+    dcc.Dropdown(
+        id='pokemon-dropdown',
+        options=[{'label': name, 'value': name} for name in newdf['name'].unique()],
+        value=newdf['name'].unique()[0],
+        multi=False,
+        style={'color': 'black'}
+    ),
+    html.Div(id='evolution-output'),
+])
+
+# Define the callback to update the evolution output
 @callback(
-    Output('bar1-fig', 'figure'),
-    Input('day1-choice', 'value')
+    Output('evolution-output', 'children'),
+    Input('pokemon-dropdown', 'value')
 )
-def update_graph(value):
-    dff = df[df.day==value]
-    fig = px.bar(dff, x='smoker', y='total_bill')
-    return fig
+def update_evolution_output(selected_pokemon):
+    output = []
+
+    pokemon_list = newdf[newdf['Pokemon_name'] == selected_pokemon]['link'].tolist()
+
+    for i in pokemon_list:
+        sample = newdf[newdf['link'] == i]  # Define sample DataFrame within the loop
+        link_container = html.Div([
+            dbc.Card([
+                dbc.CardBody([
+                    html.P(f"Evolution Chain: {i}"),
+                    html.Div([
+                        dbc.Card([
+                            dbc.CardBody([
+                                dbc.CardImg(id='img-output', src="assets/images/" + sample.iloc[s]['name_split'] + ".png", top=True),
+                                dbc.CardBody([
+                                    html.H5(sample.iloc[s]['name'], className="card-title", style={'font-size': '12px'}),
+                                    html.P("Pokedex ID : " + str(sample.iloc[s]['Pokedex Number']), className="card-text", style={'font-size': '10px'}),
+                                    html.P("Status : " + sample.iloc[s]['Status'], className="card-text", style={'font-size': '10px'}),
+                                    html.P("Generation : " + str(sample.iloc[s]['Generation']), className="card-text", style={'font-size': '10px'}),
+                                    html.P("Friendship : " + str(int(sample.iloc[s]['Base Friendship'])), className="card-text", style={'font-size': '10px'}),
+                                    html.P("Catch Rate : " + str(int(sample.iloc[s]['Catch Rate'])), className="card-text", style={'font-size': '10px'}),
+                                    html.P("Total Points : " + str(int(sample.iloc[s]['Total Points'])), className="card-text", style={'font-size': '10px'}),
+                                ])
+                            ])
+                        ], style={"width": "18rem", "backgroundColor": '#0e2535', "font_size": "5px"})
+                        for s in range(len(sample))
+                    ], style={'display': 'flex'})
+                ])
+            ], style={'width': '900px', 'height': '650px', 'margin': '50px', 'background-color': 'slategray'})
+        ])
+        output.append(link_container)
+
+    return output
